@@ -53,7 +53,7 @@ Run `03-cells_disitribution_Figure_1H.ipynb`. Produces the stacked bar chart of 
 The following R markdown notebook covers the remaining panels:
 
 ```bash
-Rscript -e "rmarkdown::render('04-perturbaion_distribution_Figure_1_GIJK.rmd')"
+Rscript -e "rmarkdown::render('04-perturbaion_distribution_Figure_1_GIK.rmd')"
 ```
 
 These plot per-perturbation cell counts, guide efficiency, and target-gene coverage across brain regions.
