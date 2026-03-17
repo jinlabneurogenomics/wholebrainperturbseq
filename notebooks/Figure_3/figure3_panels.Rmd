@@ -34,22 +34,25 @@ suppressPackageStartupMessages({
 
 ```{r paths}
 # All data relative to this Rmd file
-DATA_DIR <- file.path("..", "data", "Figure_3")
+DATA_DIR <- "/data/wholebrain_crispr_atlas"
 
-DEG_XLSX    <- file.path(DATA_DIR, "wilcoxon_de_results_pval.adj_0.1_cutoff.xlsx")
-GRIN_CSV    <- file.path(DATA_DIR, "wilcoxon_grin_de_20260228.csv")
-PARQUET     <- file.path(DATA_DIR, "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
+DEG_XLSX    <- file.path(DATA_DIR, "supplementary_data", "Data S4. Whole brain in vivo perturb-seq differentially expressed genes by Wilcoxon Rank Sum test.xlsx")
+PARQUET     <- file.path(DATA_DIR, "analysis", "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
+```
+
+```{r read-deg}
+de <- read_excel(DEG_XLSX, skip = 1)
+```
+
+```{r read-parquet}
+df_raw <- read_parquet(PARQUET)
 ```
 
 ---
 
-## Data File 1 — `wilcoxon_de_results_pval.adj_0.1_cutoff.xlsx`
-
 ### Figure 3D — Grin/Gria Dotplot: effect size across brain regions
 
 ```{r fig3d-data}
-de <- read_excel(DEG_XLSX)
-
 grin_de <- de %>%
   filter(grepl("^grin|^gria", gene_target, ignore.case = TRUE)) %>%
   mutate(group = gsub("-", " ", group_name, fixed = TRUE))
@@ -122,7 +125,7 @@ p3d <- ggplot(plot_df_f, aes(x = group, y = gene_target)) +
   ) +
   scale_fill_gradientn(
     name   = "avg(abs(log2FC))",
-    colors = c("white", "#6baed6", "#2171b5", "#08519c"),   # fixed: 4 colours, 4 values
+    colors = c("white", "#6baed6", "#2171b5", "#08519c"),
     values = rescale(c(0, 0.4, 0.7, 1.0))
   ) +
   labs(
@@ -143,7 +146,7 @@ p3d <- ggplot(plot_df_f, aes(x = group, y = gene_target)) +
   ) +
   guides(
     size = guide_legend(order  = 1),
-    fill = guide_colorbar(order = 2)   # fixed: was `color`
+    fill = guide_colorbar(order = 2)
   )
 
 p3d
@@ -151,17 +154,21 @@ p3d
 
 ---
 
-## Data File 2 — `wilcoxon_grin_de_20260228.csv`
+## Figure 3E — Grin2a / Grin2b Correlation Plot (L2-3 IT CTX Glut)
 
-### Figure 3E — Grin2a / Grin2b Correlation Plot (L2-3 IT CTX Glut)
+Uses DEG data from Data S4 (DEG_XLSX), subset to gene_target Grin2a and Grin2b.
 
 ```{r fig3e-data}
-grin_de_sub <- read.csv(GRIN_CSV)
+# `de` is already loaded from DEG_XLSX in the Fig 3D chunk above
+grin_de_sub <- df_raw %>%
+  filter(grepl("^grin", gene_target, ignore.case = TRUE)) %>%
+  mutate(group = gsub("-", " ", group_name, fixed = TRUE))
+
 cat("Columns:", paste(names(grin_de_sub), collapse = ", "), "\n")
 cat("Unique groups:", length(unique(grin_de_sub$group)), "\n")
 ```
 
-```{r fig3e-plot, fig.width=8, fig.height=7}
+```{r fig3e-plot, fig.width=16, fig.height=5}
 target_group <- "007 L2 3 IT CTX Glut"
 
 sub <- grin_de_sub %>%
@@ -195,9 +202,12 @@ overlap <- inner_join(grin2a, grin2b, by = "names") %>%
 
 cat("Shared significant genes:", nrow(overlap), "\n")
 
-cor_res <- cor.test(overlap$lfc_grin2a, overlap$lfc_grin2b, method = "pearson")
+cor_res <- if (nrow(overlap) >= 2 && sum(complete.cases(overlap[, c("lfc_grin2a", "lfc_grin2b")])) >= 2) {
+  cor.test(overlap$lfc_grin2a, overlap$lfc_grin2b, method = "pearson")
+} else {
+  list(estimate = NA_real_, p.value = NA_real_)
+}
 
-# Count how many labels check_overlap will suppress (approximate)
 n_labeled_approx <- min(nrow(overlap), 30)
 
 p3e <- ggplot(overlap, aes(x = lfc_grin2a, y = lfc_grin2b)) +
@@ -209,7 +219,6 @@ p3e <- ggplot(overlap, aes(x = lfc_grin2a, y = lfc_grin2b)) +
     color    = "black", fill = "grey80",
     linetype = "dashed", linewidth = 0.6
   ) +
-  # fixed: use axis-fraction coords to avoid corner overlap with data
   annotate(
     "text",
     x     = -Inf, y = Inf,
@@ -250,19 +259,15 @@ p3e
 
 ### Figure 3F — Shared DEG Heatmap across perturbations (L2-3 IT CTX Glut)
 
-**Bugs fixed / notes:**
-
+**Notes:**
 - `values_fill = NA` instead of `0` to avoid imputing zero for untested pairs.
-- Removed second normalisation step (`mat_z / max(abs(mat_z))`) — z-scores alone are used.
+- Z-scores alone are used for the heatmap.
 
 ```{r fig3f-data}
-df_raw <- read_parquet(PARQUET)
-
-# Confirm the group_name format in the parquet
 sample_groups <- head(unique(df_raw$group_name), 5)
 cat("Sample group_name values:", paste(sample_groups, collapse = " | "), "\n")
 
-TARGET_GROUP <- "007 L2-3 IT CTX Glut"   # hyphen format as stored in parquet
+TARGET_GROUP <- "007 L2-3 IT CTX Glut"
 PERTS_F      <- c("Grin2a", "Gabrg2", "Kcnb1", "Grin2b", "Ap2s1", "Ap2m1")
 
 if (!TARGET_GROUP %in% unique(df_raw$group_name)) {
@@ -272,16 +277,15 @@ if (!TARGET_GROUP %in% unique(df_raw$group_name)) {
 df <- df_raw %>%
   filter(group_name == TARGET_GROUP, gene_target %in% PERTS_F)
 
-# Define DEG universe: genes significant for Grin2a or Grin2b at padj < 0.05
 df_degs <- unique(df[df$gene_target %in% c("Grin2a", "Grin2b") & df$pvals_adj < 0.05, ]$names)
-cat("DEG universe size (padj < 0.1, Grin2a|Grin2b):", length(df_degs), "\n")
+cat("DEG universe size (padj < 0.05, Grin2a|Grin2b):", length(df_degs), "\n")
 
 df_sub <- df %>%
   filter(names %in% df_degs) %>%
   select(names, logfoldchanges, gene_target)
 ```
 
-```{r fig3f-plot, fig.width=10, fig.height=8}
+```{r fig3f-plot, fig.width=16, fig.height=5}
 mat <- df_sub %>%
   pivot_wider(
     names_from   = gene_target,
@@ -291,21 +295,16 @@ mat <- df_sub %>%
   column_to_rownames("names") %>%
   as.matrix()
 
-# Reorder columns to match desired perturbation order; skip any absent
 col_keep <- intersect(PERTS_F, colnames(mat))
 if (length(setdiff(PERTS_F, colnames(mat))) > 0)
   warning("Perturbations missing from matrix: ",
           paste(setdiff(PERTS_F, colnames(mat)), collapse = ", "))
 mat <- mat[, col_keep, drop = FALSE]
 
-# Remove rows that are all-NA (no LFC for any perturbation)
 mat <- mat[rowSums(!is.na(mat)) > 0, , drop = FALSE]
 
-# Z-score across perturbations per gene
 mat_z <- t(scale(t(mat)))
-mat_scaled <- mat_z / max(abs(mat_z)) # consider to remove it for keeping relative magnitude 
 
-# Remove constant / all-NA rows that produce NaN z-scores
 bad_rows <- apply(mat_z, 1, function(x) all(is.nan(x) | is.na(x)))
 if (any(bad_rows)) {
   message(sum(bad_rows), " constant/all-NA gene rows removed before clustering.")

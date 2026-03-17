@@ -43,6 +43,8 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
 COPY environments/install_r_packages.R /tmp/install_r_packages.R
 RUN Rscript /tmp/install_r_packages.R \
     && rm /tmp/install_r_packages.R
+# Ensure ggpubr (and common deps) are present; re-run install if verification failed
+RUN Rscript -e "if (!requireNamespace('ggpubr', quietly = TRUE)) { install.packages('ggpubr', dependencies = TRUE, repos = 'https://cloud.r-project.org/') }"
 
 # ---- 3. Extra Python deps (base has scanpy, anndata, pertpy, rapids_singlecell) ----
 RUN pip install --no-cache-dir huggingface_hub
