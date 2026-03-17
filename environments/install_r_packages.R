@@ -1,0 +1,55 @@
+#!/usr/bin/env Rscript
+# ============================================================
+# Install R packages required for Whole Brain Perturb-seq
+# (Figure 2, 3, 4 and related notebooks)
+# ============================================================
+# Run from repo root or environments/: Rscript install_r_packages.R
+# ============================================================
+
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+# Packages used across Figure 2, 3, 4 Rmd/notebooks
+packages <- c(
+  # tidyverse and core
+  "tidyverse",   # dplyr, ggplot2, tidyr, forcats, readr, purrr
+  "data.table",
+  "readxl",
+  "patchwork",
+  "cowplot",
+  "ggbeeswarm",
+  "ggpubr",
+  "ggrepel",
+  "pheatmap",
+  "viridis",
+  "scales",
+  # Figure 3 and general
+  "arrow",
+  "RColorBrewer",
+  # Figure 1 (optional; some notebooks use pak)
+  "Matrix",
+  "reshape2",
+  # Rendering
+  "rmarkdown",
+  "knitr"
+)
+
+cat("Installing", length(packages), "R packages from CRAN...\n")
+
+for (pkg in packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    cat("  Installing", pkg, "...\n")
+    install.packages(pkg, dependencies = TRUE, quiet = TRUE)
+  } else {
+    cat("  ", pkg, "already installed\n")
+  }
+}
+
+# Verify critical packages load
+cat("\nVerifying packages load:\n")
+required <- c("tidyverse", "data.table", "readxl", "patchwork", "pheatmap", "rmarkdown")
+for (pkg in required) {
+  ok <- requireNamespace(pkg, quietly = TRUE)
+  cat("  ", pkg, ":", if (ok) "OK" else "FAILED", "\n")
+}
+
+cat("\nDone.\n")
