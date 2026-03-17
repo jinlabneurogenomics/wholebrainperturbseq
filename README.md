@@ -47,7 +47,7 @@ python scripts/download.py --output-dir /path/to/output
 Example with the data mount at `/data`:
 
 ```bash
-python scripts/download.py --output-dir /data/WholeBrainPerturbSeq
+python scripts/download.py --output-dir /data/wholebrain_crispr_atlas
 ```
 
 ## Supplementary data
@@ -62,7 +62,7 @@ Place the downloaded files in the paths expected by each notebook (e.g. `Figure4
 
 [`scripts/processing_script.sh`](scripts/processing_script.sh) prepares the downloaded h5ad shards for downstream steps such as **differential gene expression (DEGs)** and **E-distance**. It (1) processes each batch and extracts guide/expression data, (2) applies QC filters per batch, (3) merges batches into one AnnData, and (4) runs final QC on the merged object.
 
-**Prerequisite:** Downloaded data at `/data/WholeBrainPerturbSeq/h5ads/` (e.g. from the [Data download](#data-download) step with `--output-dir /data/WholeBrainPerturbSeq`).
+**Prerequisite:** Downloaded data at `/data/wholebrain_crispr_atlas/h5ads/` (e.g. from the [Data download](#data-download) step with `--output-dir /data/wholebrain_crispr_atlas`).
 
 **Run from the repository root** (e.g. inside the Docker container):
 
@@ -70,13 +70,18 @@ Place the downloaded files in the paths expected by each notebook (e.g. `Figure4
 cd scripts && bash processing_script.sh
 ```
 
-The script reads from `BASE_DATA_PATH` (set to `/data/WholeBrainPerturbSeq` in the script) and writes to `processed/` under that path. The final merged, filtered object is `processed/WB8588_screen_gex_filtered.h5ad`, which you can use for DEG notebooks and E-distance analysis.
+The script reads from `BASE_DATA_PATH` (set to `/data/wholebrain_crispr_atlas` in the script) and writes to `processed/` under that path. The final merged, filtered object is `processed/WB8588_screen_gex_filtered.h5ad`, which you can use for DEG notebooks and E-distance analysis.
 
 ## Notebooks
 
-| Notebook | Outputs | Description |
-|----------|---------|-------------|
-| **cell_type_differential_abundance_figure2_s5** | Figure 2 A/B/C, Figure S5 A/B/C, Data 1 | Fisher’s exact test (differential abundance), MAGeCK2, fitness loss / log-odds heatmaps |
-| **deg_analysis_figure_s6_and_data_s4** | Figure S6 B, Data S4 A/B | Wilcoxon DE per cell type, potency/magnitude heatmaps, supplementary DE table |
-| **pairwise_edistance_figure3_and_data_s5** | Figure 3A, Figure S8, Data S5 | Pairwise E-distance per cell type (and whole brain), clustermaps |
-| **NDD_gene_perturbation_analysis_figure4** | Figure 4, Data S6/S7 | Disorder-stratified DEG burden and downstream risk gene enrichment per cell type |
+Notebooks are under `notebooks/`, grouped by figure. Rendered **HTML** outputs are available for some notebooks. Detailed steps for **Figure 1** are in [`notebooks/Figure_1/README.md`](notebooks/Figure_1/README.md).
+
+| Notebook | Outputs | Description | Rendered HTML |
+|----------|---------|-------------|---------------|
+| **Figure 1** ([`notebooks/Figure_1/`](notebooks/Figure_1/)) | Figure 1 B, G, H, I, K | Python notebooks (UMAP 1b, validation, cell-type distribution 1H) and R **Rmd** ([`04-perturbaion_distribution_Figure_1_GIK.rmd`](notebooks/Figure_1/04-perturbaion_distribution_Figure_1_GIK.rmd)) for panels G, I, K. See linked README for scripts and config. | [`04-perturbaion_distribution_Figure_1_GIK.nb.html`](notebooks/Figure_1/04-perturbaion_distribution_Figure_1_GIK.nb.html) |
+| [`cell_type_differential_abundance_figure2_s5.ipynb`](notebooks/Figure_2/Figure_2_celltype_depletion_analysis_a-b-c/cell_type_differential_abundance_figure2_s5.ipynb) | Figure 2 A/B/C, Figure S5 A/B/C, Data S3 | Fisher’s exact test (differential abundance), MAGeCK2, fitness loss / log-odds heatmaps. | — |
+| [`DEGs_computation.ipynb`](notebooks/DEGs_computation.ipynb) | Figure S6 B, Data S4 A/B | Wilcoxon DE per cell type; potency/magnitude heatmaps; exports supplementary DE table. | — |
+| [`figure2_panels.ipynb`](notebooks/Figure_2/Figure_2_e-f-g-h-i/figure2_panels.ipynb) | Figure 2 E, F, G, H, I | Panels from supplementary data: top-50 DEG barplot, Jaccard heatmap, shared-DEG LFC heatmap, Tsc1/Tsc2 scatter, SWI/SNF heatmap. | — |
+| [`pairwise_edistance_figure3_and_data_s5.ipynb`](notebooks/Figure_3/pairwise_edistance_figure3_and_data_s5.ipynb) | Figure 3A, Figure S8, Data S5 | Pairwise E-distance per cell type (and whole brain); clustermaps. | — |
+| [`figure3_panels.Rmd`](notebooks/Figure_3/figure3_panels.Rmd) | Figure 3 D, E, F | Grin/Gria analysis: effect-size dotplot, Grin2a/Grin2b correlation, shared-DEG heatmap (L2-3 IT CTX Glut). | [`figure3_panels.html`](notebooks/Figure_3/figure3_panels.html), [`figure3_panels_old.html`](notebooks/Figure_3/figure3_panels_old.html) |
+| [`figure4_panels.Rmd`](notebooks/Figure_4/figure4_panels.Rmd) | Figure 4, Data S6/S7 | NDD gene × perturbation analysis; disorder-stratified DEG burden and risk-gene enrichment per cell type. | — |
