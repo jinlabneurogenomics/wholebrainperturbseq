@@ -870,12 +870,6 @@ if __name__ == "__main__":
             # Split, strip, and ignore any blank lines
             use_genes = [line.strip() for line in f if line.strip()]
 
-        adata_rank = ad.read_h5ad(config["adata_rank_path"])
-        for key, val in adata_rank.uns.items():
-            if key not in adata.uns:
-                adata.uns[key] = val
-        del adata_rank
-
         if config["filter"]:
             adata = adata[(adata.obs["scDblFinder.class"]=="singlet") 
                 & (adata.obs["num_genes"]>=2000)

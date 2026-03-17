@@ -26,5 +26,5 @@ pertpy>=0.6.0
 # Data download (scripts/download.py)
 huggingface_hub>=0.16.0
 
-# Optional for Figure 1 GPU pipeline (not required for standard runs):
-# dask[array] dask-cuda cupy-cuda12x rmm rapids-singlecell zarr hnswlib psutil
+# UMAP (Figure 1)
+hnswlib>=0.8.0

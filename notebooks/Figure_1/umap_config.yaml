@@ -1,0 +1,43 @@
+parent_obs_key:
+
+cache_key_hier3: impute_knn_cache_hier3
+
+hier_levels:
+  - neighborhood
+  - predicted_class
+  - predicted_subclass
+
+raw_data_path: /data/wholebrain_crispr_atlas/raw_wholebrain.zarr
+data_path: /data/wholebrain_crispr_atlas/filtered_lognorm.zarr
+out_dir: /data/wholebrain_crispr_atlas/umap_results
+use_genes_path: /data/wholebrain_crispr_atlas/supplementary_data/use_genes.txt
+
+seed: 123
+
+sparse_chunk_size: 20000
+cell_batch_size: 400000
+
+knn:
+  k: 15
+  metric: cosine
+  exclude_self: false
+  n_marker_knn: 10
+  n_marker_imp: 20
+
+filter: false
+normalize: false
+downstream: true
+subsample_pca: true
+umap_metric: euclidean
+umap_neighbors: 25
+umap_min_dist: 0.4
+umap_filter: false
+use_previous_results: false
+previous_results_path: null
+subsampling_scheme: rare
+
+plt_categories:
+  - neighborhood
+  - predicted_class
+  - cell_type
+  - neuron_type

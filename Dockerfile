@@ -23,6 +23,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     && echo "deb [arch=amd64] https://cloud.r-project.org/bin/linux/ubuntu noble-cran40/" > /etc/apt/sources.list.d/cran_r.list \
     && apt-get update -y \
     && apt-get install -y --no-install-recommends \
+    pandoc \
     r-base \
     r-base-dev \
     libcurl4-openssl-dev \
