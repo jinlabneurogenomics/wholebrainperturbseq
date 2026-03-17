@@ -14,13 +14,14 @@ def summarize_de_genes_per_condition(
     savepath: str | None = None,
     dpi: int = 150,
     format: str | None = None,
+    deg_col: str = "names",
 ) -> tuple:
     """
     Summarize number of DE genes and cells per condition (group_name x target_gene).
     Adds mean absolute log fold change (LFC) for each condition.
 
     Args:
-        df_sig: Filtered dataframe of DE results (columns include names, logfoldchanges,
+        df_sig: Filtered dataframe of DE results (columns include deg_col, logfoldchanges,
             n_pert_matched, and the group_name_col / target_gene_col).
         min_de_genes: Minimum number of DE genes per condition to highlight/report.
         lfc_threshold: Threshold for |logfoldchange| for a gene to count as DE (default=1.0).
@@ -41,7 +42,7 @@ def summarize_de_genes_per_condition(
     df_sig["condition"] = df_sig[group_name_col] + " x " + df_sig[target_gene_col].astype(str)
     df_sig_filtered = df_sig[df_sig["logfoldchanges"].abs() >= lfc_threshold]
 
-    de_genes_per_condition = df_sig_filtered.groupby("condition")["names"].nunique()
+    de_genes_per_condition = df_sig_filtered.groupby("condition")[deg_col].nunique()
     n_cells_per_condition = df_sig_filtered.groupby("condition")["n_pert_matched"].max()
     mean_abs_lfc_per_condition = df_sig_filtered.groupby("condition")["logfoldchanges"].apply(
         lambda x: x.abs().mean()
