@@ -1,0 +1,333 @@
+---
+title: "Figure 3 — Grin/Gria Analysis"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width  = 14,
+  fig.height = 5.5
+)
+```
+
+```{r libraries}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(ggplot2)
+  library(readxl)
+  library(arrow)
+  library(pheatmap)
+  library(RColorBrewer)
+  library(scales)
+})
+```
+
+```{r paths}
+# All data relative to this Rmd file
+DATA_DIR <- file.path("..", "data", "Figure_3")
+
+DEG_XLSX    <- file.path(DATA_DIR, "wilcoxon_de_results_pval.adj_0.1_cutoff.xlsx")
+GRIN_CSV    <- file.path(DATA_DIR, "wilcoxon_grin_de_20260228.csv")
+PARQUET     <- file.path(DATA_DIR, "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
+```
+
+---
+
+## Data File 1 — `wilcoxon_de_results_pval.adj_0.1_cutoff.xlsx`
+
+### Figure 3D — Grin/Gria Dotplot: effect size across brain regions
+
+```{r fig3d-data}
+de <- read_excel(DEG_XLSX)
+
+grin_de <- de %>%
+  filter(grepl("^grin|^gria", gene_target, ignore.case = TRUE)) %>%
+  mutate(group = gsub("-", " ", group_name, fixed = TRUE))
+
+summary_df <- grin_de %>%
+  group_by(gene_target, group) %>%
+  summarize(
+    n_deg        = n(),
+    mean_abs_lfc = mean(abs(logfoldchanges), na.rm = TRUE),
+    .groups = "drop"
+  )
+
+grin_levels  <- sort(unique(summary_df$gene_target))
+group_levels <- sort(unique(summary_df$group))
+
+plot_df <- tidyr::expand_grid(
+  gene_target = grin_levels,
+  group       = group_levels
+) %>%
+  left_join(summary_df, by = c("gene_target", "group")) %>%
+  filter(!is.na(n_deg))
+
+cat("Unique gene targets:", paste(sort(unique(plot_df$gene_target)), collapse = ", "), "\n")
+cat("Unique cell-type groups:", length(unique(plot_df$group)), "\n")
+```
+
+```{r fig3d-plot, fig.width=16, fig.height=5}
+row_order <- rev(c("Grin1", "Grin2a", "Grin2b", "Grin2d", "Gria2", "Gria1", "Gria3"))
+col_order <- c(
+  "007 L2 3 IT CTX Glut", "005 L4 5 IT CTX Glut", "022 L5 ET CTX Glut",
+  "151 TH Prkcd Grin2c Glut", "155 MB Glut", "052 Pvalb Gaba",
+  "145 MH LH TH Glut", "053 Sst Gaba", "008 L2 3 IT ENT PPP RSP Glut",
+  "191 MB P MY GABA", "217 P MY Pineal Glut", "001 L5 6 IT Glut",
+  "110 CNU HYa HY MM Glut", "066 CNU HYa HY GABA", "046 CTX CGE GABA",
+  "027 NP CT L6b OB Glut", "009 L2 3 IT PIR AON ENT Glut", "308 CB GABA"
+)
+
+# Runtime checks — warn instead of silently dropping
+missing_rows <- setdiff(row_order, unique(plot_df$gene_target))
+missing_cols <- setdiff(col_order, unique(plot_df$group))
+if (length(missing_rows) > 0) warning("row_order entries not in data: ", paste(missing_rows, collapse = ", "))
+if (length(missing_cols) > 0) warning("col_order entries not in data: ", paste(missing_cols, collapse = ", "))
+
+deg_breaks  <- c(10, 50, 100)
+size_breaks <- log10(deg_breaks + 1)
+size_labels <- as.character(deg_breaks)
+
+plot_df_f <- plot_df %>%
+  mutate(
+    n_deg_log10 = log10(n_deg + 1),
+    gene_target = factor(gene_target, levels = row_order),
+    group       = factor(group,       levels = col_order)
+  )
+
+p3d <- ggplot(plot_df_f, aes(x = group, y = gene_target)) +
+  geom_tile(fill = NA, color = NA) +
+  geom_point(
+    aes(size = n_deg_log10, fill = mean_abs_lfc),
+    shape  = 21,
+    color  = "grey40",
+    stroke = 0.6,
+    alpha  = 0.95,
+    na.rm  = TRUE
+  ) +
+  scale_size_continuous(
+    name   = "#DEGs",
+    range  = c(3, 10),
+    breaks = size_breaks,
+    labels = size_labels
+  ) +
+  scale_fill_gradientn(
+    name   = "avg(abs(log2FC))",
+    colors = c("white", "#6baed6", "#2171b5", "#08519c"),   # fixed: 4 colours, 4 values
+    values = rescale(c(0, 0.4, 0.7, 1.0))
+  ) +
+  labs(
+    x     = NULL,
+    y     = NULL,
+    title = "Cell type-restricted effects of NMDA receptor signaling"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.x  = element_text(angle = 60, hjust = 1, vjust = 1, size = 8.5),
+    axis.text.y  = element_text(face = "italic", size = 12),
+    axis.ticks   = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.6),
+    legend.position  = "right",
+    legend.title = element_text(size = 10),
+    legend.text  = element_text(size = 9),
+    plot.title   = element_text(face = "bold", size = 13, hjust = 0)
+  ) +
+  guides(
+    size = guide_legend(order  = 1),
+    fill = guide_colorbar(order = 2)   # fixed: was `color`
+  )
+
+p3d
+```
+
+---
+
+## Data File 2 — `wilcoxon_grin_de_20260228.csv`
+
+### Figure 3E — Grin2a / Grin2b Correlation Plot (L2-3 IT CTX Glut)
+
+```{r fig3e-data}
+grin_de_sub <- read.csv(GRIN_CSV)
+cat("Columns:", paste(names(grin_de_sub), collapse = ", "), "\n")
+cat("Unique groups:", length(unique(grin_de_sub$group)), "\n")
+```
+
+```{r fig3e-plot, fig.width=8, fig.height=7}
+target_group <- "007 L2 3 IT CTX Glut"
+
+sub <- grin_de_sub %>%
+  filter(group == target_group, gene_target %in% c("Grin2a", "Grin2b")) %>%
+  group_by(gene_target, names) %>%
+  summarize(
+    lfc  = mean(logfoldchanges, na.rm = TRUE),
+    padj = min(pvals_adj,       na.rm = TRUE),
+    .groups = "drop"
+  )
+
+grin2a  <- sub %>% filter(gene_target == "Grin2a") %>%
+  transmute(names, lfc_grin2a = lfc, padj_grin2a = padj)
+grin2b  <- sub %>% filter(gene_target == "Grin2b") %>%
+  transmute(names, lfc_grin2b = lfc, padj_grin2b = padj)
+
+overlap <- inner_join(grin2a, grin2b, by = "names") %>%
+  mutate(
+    direction = ifelse(lfc_grin2a * lfc_grin2b >= 0, "same", "opposite"),
+    sig_a     = padj_grin2a <= 0.1,
+    sig_b     = padj_grin2b <= 0.1,
+    sig_class = case_when(
+      sig_a & sig_b   ~ "both",
+      sig_a & !sig_b  ~ "Grin2a only",
+      !sig_a & sig_b  ~ "Grin2b only",
+      TRUE            ~ "neither"
+    ),
+    evidence  = -log10(pmin(padj_grin2a, padj_grin2b))
+  ) %>%
+  filter(sig_a | sig_b)
+
+cat("Shared significant genes:", nrow(overlap), "\n")
+
+cor_res <- cor.test(overlap$lfc_grin2a, overlap$lfc_grin2b, method = "pearson")
+
+# Count how many labels check_overlap will suppress (approximate)
+n_labeled_approx <- min(nrow(overlap), 30)
+
+p3e <- ggplot(overlap, aes(x = lfc_grin2a, y = lfc_grin2b)) +
+  geom_hline(yintercept = 0, linewidth = 0.35, color = "#9aa1a8") +
+  geom_vline(xintercept = 0, linewidth = 0.35, color = "#9aa1a8") +
+  geom_point(aes(color = direction), size = 3.8, alpha = 0.95) +
+  geom_smooth(
+    method   = "lm", se = TRUE,
+    color    = "black", fill = "grey80",
+    linetype = "dashed", linewidth = 0.6
+  ) +
+  # fixed: use axis-fraction coords to avoid corner overlap with data
+  annotate(
+    "text",
+    x     = -Inf, y = Inf,
+    label = paste0(
+      "Pearson r = ", round(cor_res$estimate, 2),
+      "\np = ", signif(cor_res$p.value, 3)
+    ),
+    hjust  = -0.1,
+    vjust  = 1.3,
+    size   = 4.5
+  ) +
+  geom_text(
+    aes(label = names),
+    nudge_x      = 0.03,
+    nudge_y      = 0.03,
+    size         = 4.2,
+    check_overlap = TRUE
+  ) +
+  scale_color_manual(values = c("opposite" = "#1f77b4", "same" = "#d62728")) +
+  labs(
+    title = paste0(target_group, ": Grin2a vs Grin2b shared DEGs"),
+    x     = "Grin2a log2FC",
+    y     = "Grin2b log2FC",
+    color = NULL
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold"),
+    legend.position  = "top"
+  )
+
+p3e
+```
+
+---
+
+## Data File 3 — `wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet`
+
+### Figure 3F — Shared DEG Heatmap across perturbations (L2-3 IT CTX Glut)
+
+**Bugs fixed / notes:**
+
+- `values_fill = NA` instead of `0` to avoid imputing zero for untested pairs.
+- Removed second normalisation step (`mat_z / max(abs(mat_z))`) — z-scores alone are used.
+
+```{r fig3f-data}
+df_raw <- read_parquet(PARQUET)
+
+# Confirm the group_name format in the parquet
+sample_groups <- head(unique(df_raw$group_name), 5)
+cat("Sample group_name values:", paste(sample_groups, collapse = " | "), "\n")
+
+TARGET_GROUP <- "007 L2-3 IT CTX Glut"   # hyphen format as stored in parquet
+PERTS_F      <- c("Grin2a", "Gabrg2", "Kcnb1", "Grin2b", "Ap2s1", "Ap2m1")
+
+if (!TARGET_GROUP %in% unique(df_raw$group_name)) {
+  stop("group_name '", TARGET_GROUP, "' not found. Check hyphen vs space format.")
+}
+
+df <- df_raw %>%
+  filter(group_name == TARGET_GROUP, gene_target %in% PERTS_F)
+
+# Define DEG universe: genes significant for Grin2a or Grin2b at padj < 0.05
+df_degs <- unique(df[df$gene_target %in% c("Grin2a", "Grin2b") & df$pvals_adj < 0.05, ]$names)
+cat("DEG universe size (padj < 0.1, Grin2a|Grin2b):", length(df_degs), "\n")
+
+df_sub <- df %>%
+  filter(names %in% df_degs) %>%
+  select(names, logfoldchanges, gene_target)
+```
+
+```{r fig3f-plot, fig.width=10, fig.height=8}
+mat <- df_sub %>%
+  pivot_wider(
+    names_from   = gene_target,
+    values_from  = logfoldchanges,
+    values_fill  = NA
+  ) %>%
+  column_to_rownames("names") %>%
+  as.matrix()
+
+# Reorder columns to match desired perturbation order; skip any absent
+col_keep <- intersect(PERTS_F, colnames(mat))
+if (length(setdiff(PERTS_F, colnames(mat))) > 0)
+  warning("Perturbations missing from matrix: ",
+          paste(setdiff(PERTS_F, colnames(mat)), collapse = ", "))
+mat <- mat[, col_keep, drop = FALSE]
+
+# Remove rows that are all-NA (no LFC for any perturbation)
+mat <- mat[rowSums(!is.na(mat)) > 0, , drop = FALSE]
+
+# Z-score across perturbations per gene
+mat_z <- t(scale(t(mat)))
+mat_scaled <- mat_z / max(abs(mat_z)) # consider to remove it for keeping relative magnitude 
+
+# Remove constant / all-NA rows that produce NaN z-scores
+bad_rows <- apply(mat_z, 1, function(x) all(is.nan(x) | is.na(x)))
+if (any(bad_rows)) {
+  message(sum(bad_rows), " constant/all-NA gene rows removed before clustering.")
+  mat_z <- mat_z[!bad_rows, , drop = FALSE]
+}
+
+heat_colors <- colorRampPalette(c("#3b6fb6", "white", "#c43c39"))(100)
+
+pheatmap(
+  mat_z,
+  color                    = heat_colors,
+  cluster_rows             = TRUE,
+  cluster_cols             = FALSE,
+  clustering_distance_rows = "correlation",
+  scale                    = "none",
+  border_color             = NA,
+  show_rownames            = TRUE,
+  show_colnames            = TRUE,
+  fontsize_row             = 9,
+  fontsize_col             = 13,
+  angle_col                = 45,
+  treeheight_row           = 60,
+  main                     = paste0(TARGET_GROUP, ": shared Grin2a/Grin2b DEG heatmap\n(z-scored LFC, padj < 0.05)")
+)
+```

@@ -18,6 +18,7 @@ seaborn>=0.11.0
 tqdm>=4.62.0
 joblib>=1.1.0
 pyyaml>=5.4.0
+openpyxl>=3.0.0
 
 # Perturbation analysis (Figure 3, etc.)
 pertpy>=0.6.0
