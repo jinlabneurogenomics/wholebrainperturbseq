@@ -1,5 +1,5 @@
 ---
-title: "Fig 1 G,F,J — fixed"
+title: "Fig 1 G,I,J,K"
 output: html_notebook
 ---
 
@@ -15,8 +15,7 @@ packages <- c(
   "tibble",
   "reshape2",
   "RColorBrewer",
-  "arrow",
-  "reticulate"
+  "arrow"
 )
 
 if (!requireNamespace("pak", quietly = TRUE)) {
@@ -35,21 +34,21 @@ FIGURES_DIR <- "Figures"
 dir.create(FIGURES_DIR, showWarnings = FALSE)
 ```
 
-# Download metadata from HuggingFace
+# Read metadata
 ```{r}
-# Uses Python's huggingface_hub via reticulate to download the metadata parquet.
-# Set HF_TOKEN env var if the repo requires authentication.
-hf <- import("huggingface_hub")
+# all_obs.parquet can be downloaded from HF Hub via scripts/download.py
+# See README.md for details
+BASE_DIR <- "/data/wholebrain_crispr_atlas"
+METADATA_PATH <- file.path(BASE_DIR, "metadata", "all_obs.parquet")
 
-hf_token <- Sys.getenv("HF_TOKEN", unset = NA)
-meta_path <- hf$hf_hub_download(
-  repo_id   = "perturbai/wholebrain_crispr_atlas",
-  filename  = "metadata/all_obs.parquet",
-  repo_type = "dataset",
-  token     = if (is.na(hf_token)) NULL else hf_token
-)
+if (!file.exists(METADATA_PATH)) {
+  stop(
+    "Metadata file not found: ", METADATA_PATH, "\n",
+    "all_obs.parquet can be downloaded from HF Hub via scripts/download.py. See README.md for details."
+  )
+}
 
-meta <- read_parquet(meta_path)
+meta <- read_parquet(METADATA_PATH)
 cat(sprintf("Total nuclei: %s\n", format(nrow(meta), big.mark = ",")))
 cat(sprintf("Columns: %s\n", paste(colnames(meta), collapse = ", ")))
 ```
@@ -69,7 +68,8 @@ col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_co
 group_var <- "neighborhood"
 
 plot_df <- meta_n %>%
-  mutate(group = if (!is.null(group_var)) .data[[group_var]] else "all")
+  mutate(group = if (!is.null(group_var)) .data[[group_var]] else "all") %>%
+  filter(!is.na(group), !is.na(num_genes), !is.na(num_rna_umi))
 
 p_genes <- ggplot(plot_df, aes(x = group, y = num_genes, fill = group)) +
   geom_violin(scale = "width", trim = TRUE, linewidth = 0.5) +
@@ -99,7 +99,7 @@ p_combined
 ggsave(file.path(FIGURES_DIR, "Fig_1G.pdf"), plot = p_combined, dpi = 300, width = 7, height = 5, units = "in")
 ```
 
-# Fig 1F
+# Fig 1I
 ```{R}
 # meta_n is now free of double-counted compound-neighborhood cells (fixed upstream above).
 df <- meta_n %>%
@@ -137,20 +137,19 @@ ggplot(df, aes(x = cell_type, y = pct, fill = n_guides_bin)) +
     axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
     legend.position = "right"
   )
-ggsave(file.path(FIGURES_DIR, "Fig_1F.pdf"), dpi = 300, width = 4, height = 4, units = "in")
+ggsave(file.path(FIGURES_DIR, "Fig_1I.pdf"), dpi = 300, width = 4, height = 4, units = "in")
 ```
 
-# Fig 1J
+# Fig 1K
 ```{R}
 meta_sg <- meta_f %>%
   filter(num_guides == 1) %>%
   filter(!gene_target %in% "Non_target") %>%
   filter(!str_detect(gene_target, "^Safe_target"))
 
-# FIX: use predicted_subclass (finer resolution) instead of predicted_group to match
-# the paper's claim of ">33,017 perturbation × subclass pairs with >50 cells."
-meta_sg$predicted_subclass_x_guide <- paste(meta_sg$predicted_subclass, meta_sg$gene_target, sep = " x ")
-combo_counts <- table(meta_sg$predicted_subclass_x_guide)
+# Use predicted_group for perturbation × group pairs with >50 cells.
+meta_sg$predicted_group_x_guide <- paste(meta_sg$predicted_group, meta_sg$gene_target, sep = " x ")
+combo_counts <- table(meta_sg$predicted_group_x_guide)
 
 df_counts <- as.data.frame(combo_counts)
 colnames(df_counts) <- c("combo", "n")
@@ -169,7 +168,7 @@ ggplot(df_counts, aes(x = rank, y = n)) +
   labs(
     x = "Combo rank (highest count → lowest)",
     y = "Number of cells (log10)",
-    title = "Cells per predicted_subclass x guide (scatter)"
+    title = "Cells per predicted_group x guide (scatter)"
   )
-ggsave(file.path(FIGURES_DIR, "Fig_1J.pdf"), dpi = 300, width = 7, height = 5, units = "in")
+ggsave(file.path(FIGURES_DIR, "Fig_1K.pdf"), dpi = 300, width = 7, height = 5, units = "in")
 ```
