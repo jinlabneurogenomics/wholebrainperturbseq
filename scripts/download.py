@@ -2,11 +2,12 @@
 """
 download.py
 
-Downloads the wholebrain CRISPR atlas h5ad shards from HuggingFace.
-Assemble raw zarr and run preprocess via umap_preprocess.py.
+Downloads the wholebrain CRISPR atlas from HuggingFace: metadata, analysis folder,
+and h5ad shards. Assemble raw zarr and run preprocess via umap_preprocess.py.
 
 Usage:
     python download.py --output-dir /data/wholebrain_crispr_atlas [--hf-token TOKEN]
+    python download.py --output-dir /data/wholebrain_crispr_atlas --skip-h5ads   # metadata + analysis only
 
 Requirements:
     pip install huggingface_hub
@@ -81,7 +82,27 @@ def download_metadata(output_dir: Path, hf_token: str | None = None) -> list[Pat
 
 
 # ---------------------------------------------------------------------------
-# Step 2: Download h5ad shards from HuggingFace
+# Step 2: Download analysis folder from HuggingFace
+# ---------------------------------------------------------------------------
+def download_analysis(output_dir: Path, hf_token: str | None = None) -> Path:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        sys.exit("huggingface_hub not installed. Run: pip install huggingface_hub")
+
+    print("  Downloading analysis folder ...")
+    snapshot_download(
+        repo_id=HF_REPO_ID,
+        repo_type=HF_REPO_TYPE,
+        local_dir=str(output_dir),
+        allow_patterns=["analysis/*"],
+        token=hf_token,
+    )
+    return output_dir / "analysis"
+
+
+# ---------------------------------------------------------------------------
+# Step 3: Download h5ad shards from HuggingFace
 # ---------------------------------------------------------------------------
 def download_h5ads(output_dir: Path, hf_token: str | None = None) -> list[Path]:
     try:
@@ -130,6 +151,8 @@ def parse_args() -> argparse.Namespace:
                    help="Root directory for downloaded data and outputs")
     p.add_argument("--hf-token", default=None,
                    help="HuggingFace token (not needed for public datasets)")
+    p.add_argument("--skip-h5ads", action="store_true",
+                   help="Skip downloading h5ad shards (e.g. to fetch only metadata and analysis)")
     return p.parse_args()
 
 
@@ -145,10 +168,18 @@ def main() -> None:
     download_metadata(output_dir, hf_token=args.hf_token)
 
     print("\n" + "=" * 60)
-    print("Download h5ad shards from HuggingFace")
+    print("Download analysis folder from HuggingFace")
     print("=" * 60)
-    download_h5ads(output_dir, hf_token=args.hf_token)
-    print("\nDone. Run umap_preprocess.py to assemble raw zarr and run preprocess.")
+    download_analysis(output_dir, hf_token=args.hf_token)
+
+    if not args.skip_h5ads:
+        print("\n" + "=" * 60)
+        print("Download h5ad shards from HuggingFace")
+        print("=" * 60)
+        download_h5ads(output_dir, hf_token=args.hf_token)
+        print("\nDone. Run umap_preprocess.py to assemble raw zarr and run preprocess.")
+    else:
+        print("\nSkipped h5ad shards (--skip-h5ads). Done.")
 
 
 if __name__ == "__main__":
