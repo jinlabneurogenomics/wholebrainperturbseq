@@ -33,15 +33,6 @@ packages <- c(
   "knitr"
 )
 
-# biomaRt is from Bioconductor (not CRAN) — install first so it's available for all R versions
-if (!requireNamespace("biomaRt", quietly = TRUE)) {
-  cat("Installing BiocManager and biomaRt (Bioconductor)...\n")
-  if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    install.packages("BiocManager", repos = "https://cloud.r-project.org/")
-  }
-  BiocManager::install("biomaRt", update = FALSE, ask = FALSE)
-}
-
 cat("Installing", length(packages), "R packages from CRAN...\n")
 
 for (pkg in packages) {

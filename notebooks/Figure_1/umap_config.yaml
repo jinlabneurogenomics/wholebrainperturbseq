@@ -10,7 +10,7 @@ hier_levels:
 raw_data_path: /data/wholebrain_crispr_atlas/raw_wholebrain.zarr
 data_path: /data/wholebrain_crispr_atlas/filtered_lognorm.zarr
 out_dir: /data/wholebrain_crispr_atlas/umap_results
-use_genes_path: /data/wholebrain_crispr_atlas/supplementary_data/use_genes.txt
+use_genes_path: /data/wholebrain_crispr_atlas/analysis/visualization/use_genes.txt
 
 seed: 123
 

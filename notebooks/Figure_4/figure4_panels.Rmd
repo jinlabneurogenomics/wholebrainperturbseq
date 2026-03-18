@@ -25,20 +25,13 @@ knitr::opts_chunk$set(
 
 **Edit `DATA_DIR` to match your environment before running.**
 
-- `DATA_DIR` → `Figure4_inputfiles/` folder
+- `DATA_DIR` → `/data/wholebrain_crispr_atlas/analysis/` folder
 - To update:
   - `celltype_pert_number_of_cells.csv` (required for Fig 4B row annotation)
 
 ```{r config}
 # ── Path to the bundled input files ───────────────────────────────────────────
-DATA_DIR <- tryCatch(
-  file.path(dirname(rstudioapi::getSourceEditorContext()$path),
-            "Figure4_Codes", "Figure4_inputfiles"),
-  error = function(e) "./Figure4_Codes/Figure4_inputfiles"
-)
-if (!dir.exists(DATA_DIR)) {
-  DATA_DIR <- "./Figure4_Codes/Figure4_inputfiles"
-}
+DATA_DIR <- "/data/wholebrain_crispr_atlas/analysis"
 
 # ── Output directory for saved PDFs ───────────────────────────────────────────
 OUT_DIR <- "./Figure4_output"
@@ -55,6 +48,7 @@ suppressPackageStartupMessages({
   library(tidyverse)   # dplyr, ggplot2, tidyr, forcats, readr, purrr
   library(data.table)
   library(readxl)
+  library(arrow)       # read_parquet
   library(patchwork)
   library(cowplot)
   library(ggbeeswarm)
@@ -73,23 +67,22 @@ suppressPackageStartupMessages({
 These objects are reused across multiple figures.
 
 ```{r shared-data}
-# ── Gene database (Stephan list) ──────────────────────────────────────────────
-stephan_path <- file.path(DATA_DIR,
-  "geneDB-raw-data_Feb2026_Epi2_ndd_rbp_PA_xin_only_main_select.xlsx")
-stopifnot(file.exists(stephan_path))
+# ── Gene database ──────────────────────────────────────────────
+annot_path <- file.path(DATA_DIR, "ndd_perturbation", "geneDB-raw-data_Feb2026_Epi2_ndd_rbp_PA_xin_only_main_select.xlsx")
+stopifnot(file.exists(annot_path))
 
-stephan_raw <- read_excel(stephan_path)
+annot_raw <- read_excel(annot_path)
+
 
 # Sanitize column names (replace "-" with ".") for safe $ access
-stephan <- stephan_raw
-colnames(stephan) <- make.names(colnames(stephan))
+annot <- annot_raw
+colnames(annot) <- make.names(colnames(annot))
 
 # ── DEG results ───────────────────────────────────────────────────────────────
-deg_path <- file.path(DATA_DIR, "wilcoxon_de_results_pval.adj_0.05_cutoff.csv")
+deg_path <- file.path(DATA_DIR, "diff_expr_genes", "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
 stopifnot(file.exists(deg_path))
 
-de_res <- read.csv(deg_path)
-de_res$X <- NULL
+de_res <- read_parquet(deg_path) %>% filter(pvals_adj < 0.05)
 de_res <- de_res[!grepl("Safe_target", de_res$gene_target), ]
 
 message(sprintf("Loaded %d DEG rows across %d perturbation targets",
@@ -119,7 +112,7 @@ build_ndd_list <- function(sl) {
   )
 }
 
-ref_ndd_list <- build_ndd_list(stephan)
+ref_ndd_list <- build_ndd_list(annot)
 
 # ── Shared disorder class labels and colours ──────────────────────────────────
 DISORDER_LABELS <- c(
@@ -211,7 +204,7 @@ fig4a <- ggplot(fig4a_df, aes(x = category, y = n_genes, fill = disorder_class))
 fig4a
 
 # ggsave(fig4a, filename = file.path(OUT_DIR, "Fig4A_Count_Disorder_Riskgenes.pdf"),
-#        width = 6, height = 6)
+#       width = 6, height = 6)
 ```
 
 ---
@@ -315,7 +308,7 @@ grid.draw(fig4b$gtable)
 
 ```{r fig4c, fig.width=9, fig.height=4.5}
 # Merge DEG results with gene database
-de_merged <- merge(de_res, stephan, by.x = "gene_target", by.y = "Mouse.gene",
+de_merged <- merge(de_res, annot, by.x = "gene_target", by.y = "Mouse.gene",
                    all.x = TRUE)
 
 gene_level <- de_merged %>%
@@ -338,37 +331,8 @@ gene_level <- de_merged %>%
   )
 
 # ── Panel: ASD185 / DD285 ────────────────────────────────────────────────────
-neurodev_long <- gene_level %>%
-  filter(ASD185 == "Case" | DD285 == "Case") %>%
-  mutate(disorder = case_when(ASD185 == "Case" ~ "ASD185", DD285 == "Case" ~ "DD285"))
-
-mean_neurodev <- neurodev_long %>%
-  group_by(disorder) %>%
-  summarise(mean_log = mean(log_count, na.rm = TRUE),
-            mean_raw = mean(total_DEG_count, na.rm = TRUE), .groups = "drop")
-
-p_neurodev <- ggplot(neurodev_long, aes(x = log_count)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 30,
-                 fill = "#FB9A99", alpha = 0.8, color = "black") +
-  geom_density(color = "#FB9A99", fill = "#FB9A99", linewidth = 1, alpha = 0.4) +
-  geom_vline(data = mean_neurodev, aes(xintercept = mean_log), linetype = "dashed") +
-  geom_text(data = mean_neurodev,
-            aes(x = mean_log, y = Inf,
-                label = paste0("Mean = ", round(mean_raw, 1))),
-            vjust = 1.5, hjust = -0.1, inherit.aes = FALSE, size = 3) +
-  facet_wrap(~disorder, ncol = 1, scales = "free_y") +
-  theme_classic(base_size = 10) +
-  labs(x = "log10(#Total DEGs)", y = NULL) +
-  ggtitle("Neurodevelopmental")
-p_neurodev
-```
----
-
-## Figure 4C – Bug 4 check: ASD185/DD285 with `pivot_longer` fix
-
-```{r fig4c-bug4-check, fig.width=4, fig.height=4}
 neurodev_long_fixed <- gene_level %>%
-  select(gene_target, log_count, total_DEG_count, ASD185, DD285) %>%
+  dplyr::select(gene_target, log_count, total_DEG_count, ASD185, DD285) %>%
   filter(ASD185 == "Case" | DD285 == "Case") %>%
   mutate(in_ASD185 = !is.na(ASD185) & ASD185 == "Case",
          in_DD285  = !is.na(DD285)  & DD285  == "Case") %>%
@@ -377,10 +341,6 @@ neurodev_long_fixed <- gene_level %>%
   filter(is_case) %>%
   mutate(disorder = case_when(disorder == "in_ASD185" ~ "ASD185",
                               disorder == "in_DD285"  ~ "DD285"))
-
-message(sprintf("Original: %d rows | Fixed: %d rows | +%d shared genes now in both groups",
-                nrow(neurodev_long), nrow(neurodev_long_fixed),
-                nrow(neurodev_long_fixed) - nrow(neurodev_long)))
 
 mean_fixed <- neurodev_long_fixed %>%
   group_by(disorder) %>%
@@ -404,8 +364,8 @@ p_neurodev_fixed <- ggplot(neurodev_long_fixed, aes(x = log_count)) +
 
 p_neurodev_fixed
 ```
-
 ---
+
 
 ```{r fig4c-rest, fig.width=9, fig.height=4.5}
 # ── Helper: distribution-split histogram ─────────────────────────────────────
@@ -470,7 +430,6 @@ fig4c <- plot_grid(
   nrow = 1, rel_widths = c(1, 2), align = "h"
 )
 
-
 # Statistical tests
 cat("\n--- Kruskal-Wallis: LoF group ---\n")
 print(kruskal.test(total_DEG_count ~ LoF_group,
@@ -489,6 +448,7 @@ blomen_test_df <- gene_level %>%
          gene.essentiality.blomen.2015.hap1.selected != ".")
 print(wilcox.test(total_DEG_count ~ gene.essentiality.blomen.2015.hap1.selected,
                   data = blomen_test_df))
+
 # ggsave(fig4c, filename = file.path(OUT_DIR, "Fig4C_DEGBurden_Distribution.pdf"),
 #        width = 9, height = 4.5)
 
@@ -538,6 +498,12 @@ combined_inh <- bind_rows(dom_df, rec_df, x_df) %>%
     score_type = factor(score_type, levels = c("Dominant","Recessive","X-linked"))
   )
 
+# p-values for Top vs Bottom within each score_type (no ggpubr)
+p_vals_inh <- combined_inh %>%
+  group_by(score_type) %>%
+  summarise(p_val = t.test(log_total_deg ~ group)$p.value, .groups = "drop") %>%
+  mutate(y = 4, label = sprintf("p = %.2g", p_val))
+
 p_inh <- ggplot(combined_inh, aes(x = group, y = log_total_deg,
                                    fill = score_type, alpha = group)) +
   geom_boxplot(outlier.shape = NA) +
@@ -550,6 +516,7 @@ p_inh <- ggplot(combined_inh, aes(x = group, y = log_total_deg,
   base_theme +
   labs(x = "", y = "log10(#Total DEGs)") +
   theme(legend.position = "none")
+
 
 # ── TADA FDR panels ───────────────────────────────────────────────────────────
 make_tada_df <- function(tada_col) {
@@ -581,12 +548,13 @@ make_tada_plot <- function(tada_df, fill_vals, x_label) {
                      seq(0.2, by = 0.2, length.out = n())
     ) %>%
     filter(label != "ns")
+  if (nrow(pw_df) > 0) pw_df$x <- (as.numeric(pw_df$group1) + as.numeric(pw_df$group2)) / 2
 
   ggplot(tada_df, aes(x = logfdr_group, y = log_total_deg, fill = logfdr_group)) +
     geom_boxplot(outlier.shape = NA, alpha = 0.8, color = "black", linewidth = 0.4) +
     geom_jitter(width = 0.15, alpha = 0.25, size = 0.2, color = "black") +
-    { if (nrow(pw_df) > 0) stat_pvalue_manual(pw_df, label = "label", tip.length = 0.01)
-      else list() } +
+    { if (nrow(pw_df) > 0) geom_text(data = pw_df, aes(x = x, y = y.position, label = label),
+                                       inherit.aes = FALSE, size = 2.5) else list() } +
     scale_fill_manual(values = fill_vals) +
     theme_classic(base_size = 8) +
     labs(x = x_label, y = expression(log[10]("#Total DEGs"))) +
@@ -622,7 +590,8 @@ fig4d
 ## Figure 4F – DEG heatmap: 2k perturb × cell type (top DEG genes)
 
 ```{r fig4f, fig.width=11, fig.height=8}
-ndd_deg_path <- file.path(DATA_DIR, "celltype_NDD_gene_No_DEGs.csv")
+# Number of significant DEGs (adj p < 0.1) in each cell type x perturbation combo
+ndd_deg_path <- file.path(DATA_DIR, "ndd_perturbation", "celltype_NDD_gene_No_DEGs.csv")
 stopifnot(file.exists(ndd_deg_path))
 
 ndd_deg <- read.csv(ndd_deg_path)
@@ -706,7 +675,7 @@ grid.draw(fig4f$gtable)
 
 ```{r fig4h, fig.width=11, fig.height=5}
 # ── Load pre-computed NDD list ────────────────────────────────────────────────
-ref_rds <- file.path(DATA_DIR, "ref_ndd_list_edit.RDS")
+ref_rds <- file.path(DATA_DIR, "ndd_perturbation", "ref_ndd_list_edit.RDS")
 stopifnot(file.exists(ref_rds))
 ref_ndd_list_edit <- readRDS(ref_rds)
 
@@ -719,9 +688,8 @@ de_res_list <- de_res_lfc %>%
   deframe()
 
 # Background universe
-univ_path <- file.path(DATA_DIR, "unique_genes_all.csv")
-# Fallback to all_genes.csv if present
-alt_univ  <- file.path(DATA_DIR, "all_genes.csv")
+univ_path <- file.path(DATA_DIR, "ndd_perturbation", "unique_genes_all.csv")
+alt_univ  <- file.path(DATA_DIR, "ndd_perturbation", "all_genes.csv")
 if (file.exists(alt_univ)) {
   bg_genes <- read.csv(alt_univ)$X
 } else {
@@ -731,7 +699,6 @@ if (file.exists(alt_univ)) {
 de_res_list[["g_bg"]] <- bg_genes
 
 desired_order_h <- c(CELLTYPE_ORDER, "g_bg")
-# Keep only cell types present in data
 desired_order_h <- intersect(desired_order_h, names(de_res_list))
 
 # ── Fisher exact test helper ──────────────────────────────────────────────────
@@ -829,9 +796,9 @@ fig4h
 ## Figure 4I – NDD gene enrichment volcano per perturbation target
 
 ```{r fig4i, fig.width=9, fig.height=6}
-gws_path  <- file.path(DATA_DIR, "GWS_results.csv")
-asd_path  <- file.path(DATA_DIR, "ASD_rare.csv")
-univ_path <- file.path(DATA_DIR, "unique_genes_all.csv")
+gws_path  <- file.path(DATA_DIR, "ndd_perturbation", "GWS_results.csv")
+asd_path  <- file.path(DATA_DIR, "ndd_perturbation", "ASD_rare.csv")
+univ_path <- file.path(DATA_DIR, "ndd_perturbation", "unique_genes_all.csv")
 stopifnot(file.exists(gws_path), file.exists(asd_path), file.exists(univ_path))
 
 min_degs <- 20L

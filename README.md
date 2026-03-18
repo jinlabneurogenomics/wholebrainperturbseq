@@ -50,14 +50,6 @@ Example with the data mount at `/data`:
 python scripts/download.py --output-dir /data/wholebrain_crispr_atlas
 ```
 
-## Supplementary data
-
-Supplementary data tables and figure-level inputs (e.g. for Figures 2–4 and Data S4–S7) can be downloaded here:
-
-- [Supplementary data (link to be added)](PLACEHOLDER_SUPPLEMENTARY_DATA_URL)
-
-Place the downloaded files in the paths expected by each notebook (e.g. `Figure4_Codes/Figure4_inputfiles/`, or the `data/` paths referenced in the Rmd files).
-
 ## Preprocessing for downstream analysis
 
 [`scripts/processing_script.sh`](scripts/processing_script.sh) prepares the downloaded h5ad shards for downstream steps such as **differential gene expression (DEGs)** and **E-distance**. It (1) processes each batch and extracts guide/expression data, (2) applies QC filters per batch, (3) merges batches into one AnnData, and (4) runs final QC on the merged object.
@@ -74,7 +66,7 @@ The script reads from `BASE_DATA_PATH` (set to `/data/wholebrain_crispr_atlas` i
 
 ## Notebooks
 
-Notebooks are under `notebooks/`, grouped by figure. Rendered **HTML** outputs are available for some notebooks. Detailed steps for **Figure 1** are in [`notebooks/Figure_1/README.md`](notebooks/Figure_1/README.md).
+Notebooks are under `notebooks/`, grouped by figure. Rendered **HTML** outputs are available for some notebooks. Detailed steps for **Figure 1** are in [`notebooks/Figure_1/README.md`](notebooks/Figure_1/README.md); for **Figure 4**, see [`notebooks/Figure_4/README.md`](notebooks/Figure_4/README.md) (run `HomologConvert.Rmd` first, then `figure4_panels.Rmd`).
 
 | Notebook | Outputs | Description | Rendered HTML |
 |----------|---------|-------------|---------------|
@@ -84,4 +76,4 @@ Notebooks are under `notebooks/`, grouped by figure. Rendered **HTML** outputs a
 | [`figure2_panels.ipynb`](notebooks/Figure_2/Figure_2_e-f-g-h-i/figure2_panels.ipynb) | Figure 2 E, F, G, H, I | Panels from supplementary data: top-50 DEG barplot, Jaccard heatmap, shared-DEG LFC heatmap, Tsc1/Tsc2 scatter, SWI/SNF heatmap. | — |
 | [`pairwise_edistance_figure3_and_data_s5.ipynb`](notebooks/Figure_3/pairwise_edistance_figure3_and_data_s5.ipynb) | Figure 3A, Figure S8, Data S5 | Pairwise E-distance per cell type (and whole brain); clustermaps. | — |
 | [`figure3_panels.Rmd`](notebooks/Figure_3/figure3_panels.Rmd) | Figure 3 D, E, F | Grin/Gria analysis: effect-size dotplot, Grin2a/Grin2b correlation, shared-DEG heatmap (L2-3 IT CTX Glut). | [`figure3_panels.html`](notebooks/Figure_3/figure3_panels.html), [`figure3_panels_old.html`](notebooks/Figure_3/figure3_panels_old.html) |
-| [`figure4_panels.Rmd`](notebooks/Figure_4/figure4_panels.Rmd) | Figure 4, Data S6/S7 | NDD gene × perturbation analysis; disorder-stratified DEG burden and risk-gene enrichment per cell type. | — |
+| **Figure 4** ([`notebooks/Figure_4/`](notebooks/Figure_4/)) | Figure 4, Data S7 | Run **HomologConvert.Rmd** first (human→mouse gene sets), then **figure4_panels.Rmd** for NDD gene × perturbation analysis. See [Figure_4/README.md](notebooks/Figure_4/README.md) for order and commands. | — |

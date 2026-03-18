@@ -1,0 +1,228 @@
+---
+title: "Homolog conversion: human gene annotations to mouse"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Setup
+
+Define the data directory and load required packages.
+
+```{r setup-paths-and-packages}
+rm(list = ls())
+
+DATA_DIR = "/data/wholebrain_crispr_atlas/analysis"
+
+library(dplyr)
+```
+
+# Load data
+
+Load the annotation list (gene database with disorder/control annotations) and the BioMart human–mouse homolog table. Gene IDs are converted to uppercase for matching.
+
+```{r load-data}
+annot_list_full = read.csv(file.path(DATA_DIR, "ndd_perturbation", "geneDB-raw-data_Feb2026_Epi2_ndd_rbp_PA_xin.tsv"), sep = "\t")
+annot_list_full$gene_id = toupper(annot_list_full$gene_id)
+
+biomart = read.csv(file.path(DATA_DIR, "ndd_perturbation", "BioMart_homolog_conversion.csv"))
+```
+
+# Overlap with BioMart and trim columns
+
+Check how many annotation genes match BioMart human stable IDs, then remove the last 6 columns from the annotation table.
+
+```{r overlap-and-trim}
+length(intersect(annot_list_full$gene_id, biomart$Human.gene.stable.ID)) # matched
+length(setdiff(annot_list_full$gene_id, biomart$Human.gene.stable.ID))   # unmatched
+
+table(annot_list_full$biomart.main.contig)
+
+annot_list_full <- annot_list_full[, -((ncol(annot_list_full)-5):ncol(annot_list_full))]
+```
+
+# Build human gene sets (`ref_ndd_list`)
+
+Define disorder and control gene sets from the annotation table (human gene IDs).
+
+## Neurodevelopment
+
+```{r geneset-neurodev}
+ref_ndd_list <- list()
+
+# Neurodevelopment
+ref_ndd_list[['ASD185']] <- annot_list_full$gene_id[annot_list_full$asc.denovo.asd185 == "True"]
+ref_ndd_list[['NDD664']] <- annot_list_full$gene_id[annot_list_full$asc.denovo.ndd664 == "True"]
+ref_ndd_list[['DD285']]  <- annot_list_full$gene_id[annot_list_full$deciphering.developmental.disorders.ddd.significant == "True"]
+ref_ndd_list[['GEL_ID']]   <- annot_list_full$gene_id[annot_list_full$gel_id == 10]
+ref_ndd_list[['GEL_EPI']]  <- annot_list_full$gene_id[annot_list_full$gel_epi == 10]
+ref_ndd_list[['GEL_ATAX']] <- annot_list_full$gene_id[annot_list_full$gel_atax == 5]
+```
+
+## Neuropsychiatry
+
+```{r geneset-neuropsych}
+# Neuropsychiatry
+ref_ndd_list[['SCZ244']] <- annot_list_full$gene_id[annot_list_full$asc.denovo.scz244 == "True"]
+ref_ndd_list[['BPD']]  <- annot_list_full$gene_id[annot_list_full$bdp.mullins.2021.count > 0]
+ref_ndd_list[['MDD']]  <- annot_list_full$gene_id[annot_list_full$mdd.levey.2021.count > 0]
+ref_ndd_list[['ADHD']] <- annot_list_full$gene_id[annot_list_full$adhd.demontis.2021.count > 0]
+```
+
+## Neurodegenerative
+
+```{r geneset-neurodeg}
+# Neurodegenerative
+ref_ndd_list[['AD']]   <- annot_list_full$gene_id[annot_list_full$ad.bellenguez.2022.count > 0]
+ref_ndd_list[['PD']] <- annot_list_full$gene_id[annot_list_full$Parkinsons_Evidence != "."]
+ref_ndd_list[['ALS']] <- annot_list_full$gene_id[annot_list_full$ALS_Evidence != "."]
+```
+
+## Control groups (LoF constraint and Blomen essentiality)
+
+```{r geneset-control}
+# LoF constraint groups
+ref_ndd_list[['LoF-tolerant']] <- annot_list_full$gene_id[
+  annot_list_full$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("6", "7", "8", "9")
+]
+ref_ndd_list[['LoF_intermediate']] <- annot_list_full$gene_id[
+  annot_list_full$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("3", "4","5")
+]
+ref_ndd_list[['LoF_constrained']] <- annot_list_full$gene_id[
+  annot_list_full$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("0", "1", "2")
+]
+
+# Blomen 2015
+ref_ndd_list[['Blomen_HAP1']] <- annot_list_full$gene_id[
+  annot_list_full$gene.essentiality.blomen.2015.hap1.selected == "True"
+]
+ref_ndd_list[['Blomen_KBM7']] <- annot_list_full$gene_id[
+  annot_list_full$gene.essentiality.blomen.2015.kbm7.selected == "True"
+]
+
+all_genes = ref_ndd_list %>% unlist() %>% unique
+```
+
+# BioMart subset and overlap
+
+Restrict to BioMart rows with a mouse gene name and check how many of our gene set have a mouse homolog.
+
+```{r biomart-subset}
+biomart$Mouse.gene.name[biomart$Mouse.gene.name == ""] <- NA
+biomart_sub = biomart[!is.na(biomart$Mouse.gene.name),]
+
+length(intersect(all_genes, biomart_sub$Human.gene.stable.ID)) # with mouse homolog
+length(setdiff(all_genes, biomart_sub$Human.gene.stable.ID))   # without
+```
+
+# Map human to mouse (merge + name fallback)
+
+Merge the annotation table with BioMart on human stable ID. For genes without a match, try matching human gene name (title case) to mouse gene name to recover orthologs with identical symbols.
+
+```{r homolog-merge}
+proper_case <- function(x) {
+  tools::toTitleCase(tolower(x))
+}
+
+annot_list_full_mart = merge(annot_list_full, biomart, by.x = "gene_id", by.y = "Human.gene.stable.ID", all.x = TRUE)
+
+table(is.na(annot_list_full_mart$Mouse.gene.name))
+
+biomart_map <- biomart %>%
+  select(Mouse.gene.name, Mouse.gene.stable.ID) %>%
+  distinct(Mouse.gene.name, .keep_all = TRUE)
+
+annot_list_full_mart <- annot_list_full_mart %>%
+  mutate(Human.gene.name.clean = proper_case(Human.gene.name)) %>%
+  left_join(biomart_map,
+            by = c("Human.gene.name.clean" = "Mouse.gene.name"))
+
+annot_list_full_mart$Mouse.gene.stable.ID_edit <-
+  ifelse(annot_list_full_mart$Mouse.gene.stable.ID.x == "",
+         annot_list_full_mart$Mouse.gene.stable.ID.y,
+         annot_list_full_mart$Mouse.gene.stable.ID.x)
+
+annot_list_full_mart$Mouse.gene.name_edit <-
+  ifelse(annot_list_full_mart$Mouse.gene.stable.ID.x == "" & !is.na(annot_list_full_mart$Mouse.gene.stable.ID_edit),
+         annot_list_full_mart$Human.gene.name.clean,
+         annot_list_full_mart$Mouse.gene.name)
+
+annot_list_full_mart$Human.gene.name.clean <- NULL
+annot_list_full_mart$Mouse.gene.name <- NULL
+annot_list_full_mart$Mouse.gene.stable.ID.x <- NULL
+annot_list_full_mart$Mouse.gene.stable.ID.y <- NULL
+```
+
+# Build mouse gene sets (`ref_ndd_list_edit`)
+
+Rebuild the same gene set structure using mouse gene names (`Mouse.gene.name_edit`), add the full mouse background (`g_bg`), and de-duplicate each set.
+
+## Neurodevelopment (mouse)
+
+```{r geneset-edit-neurodev}
+ref_ndd_list_edit <- list()
+
+ref_ndd_list_edit[['ASD185']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$asc.denovo.asd185 == "True"]
+ref_ndd_list_edit[['NDD664']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$asc.denovo.ndd664 == "True"]
+ref_ndd_list_edit[['DD285']]  <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$deciphering.developmental.disorders.ddd.significant == "True"]
+ref_ndd_list_edit[['GEL_ID']]   <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$gel_id == 10]
+ref_ndd_list_edit[['GEL_EPI']]  <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$gel_epi == 10]
+ref_ndd_list_edit[['GEL_ATAX']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$gel_atax == 5]
+```
+
+## Neuropsychiatry (mouse)
+
+```{r geneset-edit-neuropsych}
+ref_ndd_list_edit[['SCZ244']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$asc.denovo.scz244 == "True"]
+ref_ndd_list_edit[['BPD']]  <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$bdp.mullins.2021.count > 0]
+ref_ndd_list_edit[['MDD']]  <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$mdd.levey.2021.count > 0]
+ref_ndd_list_edit[['ADHD']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$adhd.demontis.2021.count > 0]
+```
+
+## Neurodegenerative (mouse)
+
+```{r geneset-edit-neurodeg}
+ref_ndd_list_edit[['AD']]   <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$ad.bellenguez.2022.count > 0]
+ref_ndd_list_edit[['PD']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$Parkinsons_Evidence != "."]
+ref_ndd_list_edit[['ALS']] <- annot_list_full_mart$Mouse.gene.name_edit[annot_list_full_mart$ALS_Evidence != "."]
+```
+
+## Control groups (mouse)
+
+```{r geneset-edit-control}
+ref_ndd_list_edit[['LoF-tolerant']] <- annot_list_full_mart$Mouse.gene.name_edit[
+  annot_list_full_mart$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("6", "7","8","9")
+]
+ref_ndd_list_edit[['LoF_intermediate']] <- annot_list_full_mart$Mouse.gene.name_edit[
+  annot_list_full_mart$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("3", "4","5")
+]
+ref_ndd_list_edit[['LoF_constrained']] <- annot_list_full_mart$Mouse.gene.name_edit[
+  annot_list_full_mart$gnomadv2.lof.oe.ratio.upper.decile.bin %in% c("0", "1", "2")
+]
+
+ref_ndd_list_edit[['Blomen_HAP1']] <- annot_list_full_mart$Mouse.gene.name_edit[
+  annot_list_full_mart$gene.essentiality.blomen.2015.hap1.selected == "True"
+]
+ref_ndd_list_edit[['Blomen_KBM7']] <- annot_list_full_mart$Mouse.gene.name_edit[
+  annot_list_full_mart$gene.essentiality.blomen.2015.kbm7.selected == "True"
+]
+
+all_genes = ref_ndd_list_edit %>% unlist()
+ref_ndd_list_edit[['g_bg']] = unique(annot_list_full_mart$Mouse.gene.name_edit)
+ref_ndd_list_edit <- lapply(ref_ndd_list_edit, unique)
+```
+
+# Save output
+
+Write the mouse gene set list to an RDS file for use in downstream analyses (e.g. enrichment in mouse data).
+
+```{r save}
+saveRDS(ref_ndd_list_edit, file.path(DATA_DIR, "ndd_perturbation", "ref_ndd_list_edit.RDS"))
+```

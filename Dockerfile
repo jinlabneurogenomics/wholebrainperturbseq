@@ -37,6 +37,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     libtiff5-dev \
     libjpeg-dev \
     libgit2-dev \
+    libnlopt-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- 2. R packages (Figure 2, 3, 4) -------------------------

@@ -1602,14 +1602,13 @@ border-radius: 0px;
 <pre class="r"><code># All data relative to this Rmd file
 DATA_DIR &lt;- &quot;/data/wholebrain_crispr_atlas&quot;
 
-DEG_XLSX    &lt;- file.path(DATA_DIR, &quot;supplementary_data&quot;, &quot;Data S4. Whole brain in vivo perturb-seq differentially expressed genes by Wilcoxon Rank Sum test.xlsx&quot;)
-PARQUET     &lt;- file.path(DATA_DIR, &quot;analysis&quot;, &quot;wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet&quot;)</code></pre>
-<pre class="r"><code>de &lt;- read_excel(DEG_XLSX, skip = 1)</code></pre>
+PARQUET &lt;- file.path(DATA_DIR, &quot;analysis&quot;, &quot;diff_expr_genes&quot;, &quot;wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet&quot;)</code></pre>
 <pre class="r"><code>df_raw &lt;- read_parquet(PARQUET)</code></pre>
 <hr />
 <div id="figure-3d-gringria-dotplot-effect-size-across-brain-regions" class="section level3">
 <h3>Figure 3D — Grin/Gria Dotplot: effect size across brain regions</h3>
-<pre class="r"><code>grin_de &lt;- de %&gt;%
+<pre class="r"><code>grin_de &lt;- df_raw %&gt;%
+  filter(pvals_adj &lt; 0.1) %&gt;%
   filter(grepl(&quot;^grin|^gria&quot;, gene_target, ignore.case = TRUE)) %&gt;%
   mutate(group = gsub(&quot;-&quot;, &quot; &quot;, group_name, fixed = TRUE))
 
@@ -1710,10 +1709,9 @@ p3d</code></pre>
 </div>
 <div id="figure-3e-grin2a-grin2b-correlation-plot-l2-3-it-ctx-glut" class="section level2">
 <h2>Figure 3E — Grin2a / Grin2b Correlation Plot (L2-3 IT CTX Glut)</h2>
-<p>Uses DEG data from Data S4 (DEG_XLSX), subset to gene_target Grin2a
-and Grin2b.</p>
-<pre class="r"><code># `de` is already loaded from DEG_XLSX in the Fig 3D chunk above
-grin_de_sub &lt;- df_raw %&gt;%
+<p>Uses parquet DEG data (<code>df_raw</code>), subset to gene_target
+Grin2a and Grin2b.</p>
+<pre class="r"><code>grin_de_sub &lt;- df_raw %&gt;%
   filter(grepl(&quot;^grin&quot;, gene_target, ignore.case = TRUE)) %&gt;%
   mutate(group = gsub(&quot;-&quot;, &quot; &quot;, group_name, fixed = TRUE))
 

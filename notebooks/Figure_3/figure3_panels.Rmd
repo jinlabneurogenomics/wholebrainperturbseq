@@ -36,12 +36,7 @@ suppressPackageStartupMessages({
 # All data relative to this Rmd file
 DATA_DIR <- "/data/wholebrain_crispr_atlas"
 
-DEG_XLSX    <- file.path(DATA_DIR, "supplementary_data", "Data S4. Whole brain in vivo perturb-seq differentially expressed genes by Wilcoxon Rank Sum test.xlsx")
-PARQUET     <- file.path(DATA_DIR, "analysis", "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
-```
-
-```{r read-deg}
-de <- read_excel(DEG_XLSX, skip = 1)
+PARQUET <- file.path(DATA_DIR, "analysis", "diff_expr_genes", "wilcoxon_de_results_group_name_final_data_no_multi_guide_cells.parquet")
 ```
 
 ```{r read-parquet}
@@ -53,7 +48,8 @@ df_raw <- read_parquet(PARQUET)
 ### Figure 3D — Grin/Gria Dotplot: effect size across brain regions
 
 ```{r fig3d-data}
-grin_de <- de %>%
+grin_de <- df_raw %>%
+  filter(pvals_adj < 0.1) %>%
   filter(grepl("^grin|^gria", gene_target, ignore.case = TRUE)) %>%
   mutate(group = gsub("-", " ", group_name, fixed = TRUE))
 
@@ -156,10 +152,9 @@ p3d
 
 ## Figure 3E — Grin2a / Grin2b Correlation Plot (L2-3 IT CTX Glut)
 
-Uses DEG data from Data S4 (DEG_XLSX), subset to gene_target Grin2a and Grin2b.
+Uses parquet DEG data (`df_raw`), subset to gene_target Grin2a and Grin2b.
 
 ```{r fig3e-data}
-# `de` is already loaded from DEG_XLSX in the Fig 3D chunk above
 grin_de_sub <- df_raw %>%
   filter(grepl("^grin", gene_target, ignore.case = TRUE)) %>%
   mutate(group = gsub("-", " ", group_name, fixed = TRUE))
