@@ -1,5 +1,5 @@
 ---
-title: "Fig 1 G,I,J,K"
+title: "Fig 1 G,I,K"
 output: html_notebook
 ---
 
@@ -152,14 +152,16 @@ meta_sg$predicted_group_x_guide <- paste(meta_sg$predicted_group, meta_sg$gene_t
 combo_counts <- table(meta_sg$predicted_group_x_guide)
 
 df_counts <- as.data.frame(combo_counts)
-colnames(df_counts) <- c("combo", "n")
+colnames(df_counts) <- c("cell type x perturbation", "number of cells")
 df_counts <- df_counts %>%
-  arrange(desc(n)) %>%
-  mutate(rank = row_number())
+  arrange(desc(`number of cells`)) %>%
+  mutate(rank = row_number()) %>%
+  # Split "combo" into cell_type and perturbation columns, but keep "combo"
+  separate(`cell type x perturbation`, into = c("cell_type", "perturbation"), sep = " x ", remove = FALSE)
 
-write.csv(df_counts, "celltype_x_pert_number.csv", quote = FALSE, row.names = FALSE)
+write.csv(df_counts, file.path(BASE_DIR, "analysis", "visualization", "celltype_pert_number_of_cells.csv"), quote = FALSE, row.names = FALSE)
 
-ggplot(df_counts, aes(x = rank, y = n)) +
+ggplot(df_counts, aes(x = rank, y = `number of cells`)) +
   geom_point(size = 0.8, alpha = 0.6) +
   # FIX: reference line at n=50 to reproduce the paper's ">50 cells" threshold
   geom_hline(yintercept = 50, linetype = "dashed", color = "red") +

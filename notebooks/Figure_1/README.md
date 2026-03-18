@@ -17,15 +17,15 @@ An R environment with `Seurat`, `ggplot2`, and `patchwork` is needed for the `.r
 **Step 1a — Download:** Run `scripts/download.py` to fetch 14 h5ad shards from HuggingFace (`perturbai/wholebrain_crispr_atlas`) into `output-dir/h5ads/`.
 
 ```bash
-python download.py --output-dir /data/wholebrain
+python download.py --output-dir /data/wholebrain_crispr_atlas
 ```
 
 **Step 1b — Assemble zarr and preprocess:** Run `scripts/umap_preprocess.py` to assemble `raw_wholebrain.zarr` from the h5ads, create `preprocess_config.yaml`, and run filtering and log-normalisation.
 
 ```bash
 python umap_preprocess.py \
-  --output-dir /data/wholebrain \
-  --use-genes-path /data/use_genes.txt
+  --output-dir /data/wholebrain_crispr_atlas \
+  --use-genes-path /data/wholebrain_crispr_atlas/analysis/visualization/use_genes.txt
 ```
 
 Use `--skip-zarr` if the raw zarr is already built; use `--skip-preprocess` to only write the config. Outputs: `raw_wholebrain.zarr` and `filtered_lognorm.zarr` under `--output-dir`.
